@@ -1,0 +1,10 @@
+[Unit]
+Description=Launch one Oracle Cloud instance
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/loop-oracle
+EnvironmentFile=/etc/loop-oracle.env
+ExecStart=/opt/loop-oracle/.venv/bin/python /opt/loop-oracle/loop.py

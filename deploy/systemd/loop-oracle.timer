@@ -1,0 +1,12 @@
+[Unit]
+Description=Launch an Oracle Cloud instance every 5-15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=10min
+AccuracySec=30s
+Unit=loop-oracle.service
+
+[Install]
+WantedBy=timers.target
