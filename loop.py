@@ -77,12 +77,14 @@ def env_bool(name: str, default: str) -> bool:
 
 
 def load_config() -> InstanceConfig:
-    return InstanceConfig(
+    config = InstanceConfig(
         compartment_id=env("OCI_COMPARTMENT_ID", required=True),
         subnet_id=env("OCI_SUBNET_ID", required=True),
-        image_id=env("OCI_IMAGE_ID") or None,
-        image_os=env("OCI_IMAGE_OS", "Oracle Linux"),
-        image_os_version=env("OCI_IMAGE_OS_VERSION") or None,
+        # Default to a known compatible Ubuntu image if OCI_IMAGE_ID is unset.
+        image_id=env("OCI_IMAGE_ID", "ocid1.image.oc1.eu-stockholm-1.aaaaaaaalc5dysttdcwxsi6ewmon77nxgnr3zxn3s2ihigibqbgsordwnmsa") or None,
+        # Defaults match the bundled example config.
+        image_os=env("OCI_IMAGE_OS", "Canonical Ubuntu"),
+        image_os_version=env("OCI_IMAGE_OS_VERSION", "24.04 Minimal"),
         shape=env("OCI_SHAPE", "VM.Standard.A1.Flex"),
         ocpus=env_float("OCI_OCPUS", "1"),
         memory_gb=env_float("OCI_MEMORY_GB", "6"),
@@ -96,6 +98,20 @@ def load_config() -> InstanceConfig:
         oci_config_path=env("OCI_CONFIG_FILE", oci.config.DEFAULT_LOCATION),
         oci_profile=env("OCI_PROFILE", oci.config.DEFAULT_PROFILE),
     )
+
+    if not (
+        config.compartment_id.startswith("ocid1.compartment.")
+        or config.compartment_id.startswith("ocid1.tenancy.")
+    ):
+        raise ValueError(
+            "OCI_COMPARTMENT_ID must be a compartment OCID (ocid1.compartment...) or the tenancy OCID for the root compartment (ocid1.tenancy...)"
+        )
+    if not config.subnet_id.startswith("ocid1.subnet."):
+        raise ValueError("OCI_SUBNET_ID must be a subnet OCID (ocid1.subnet...)")
+    if not config.availability_domain:
+        raise ValueError("OCI_AVAILABILITY_DOMAIN is required")
+
+    return config
 
 
 def get_latest_image_id(compute_client: oci.core.ComputeClient, config: InstanceConfig) -> str:
@@ -144,6 +160,7 @@ def build_launch_details(config: InstanceConfig, image_id: str) -> oci.core.mode
             image_id=image_id,
         ),
         create_vnic_details=oci.core.models.CreateVnicDetails(
+            subnet_id=config.subnet_id,
             assign_public_ip=config.assign_public_ip,
         ),
         shape_config=shape_config,
@@ -182,7 +199,9 @@ def is_capacity_error(exc: Exception) -> bool:
     if not isinstance(exc, oci.exceptions.ServiceError):
         return False
     message = (exc.message or "").lower()
-    return "out of host capacity" in message or exc.code == "InternalError" and "capacity" in message
+    return "out of host capacity" in message or (
+        exc.code == "InternalError" and "capacity" in message
+    )
 
 
 def launch_instance(config: InstanceConfig) -> str:
@@ -203,16 +222,17 @@ def launch_instance(config: InstanceConfig) -> str:
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    capacity_retry_success_exit = True
     try:
         load_dotenv()
         config = load_config()
+        capacity_retry_success_exit = config.capacity_retry_success_exit
         launch_instance(config)
         return 0
     except Exception as exc:
         if is_capacity_error(exc):
             logging.warning("Oracle has no A1.Flex capacity right now. No instance was created; the next scheduled run will retry.")
-            config = load_config()
-            return 0 if config.capacity_retry_success_exit else 1
+            return 0 if capacity_retry_success_exit else 1
         logging.exception("Oracle Cloud instance launch failed")
         return 1
 
