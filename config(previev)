@@ -1,0 +1,6 @@
+[DEFAULT]
+user=ocid1.user.oc1..REPLACE_WITH_USER_OCID
+fingerprint=REPLACE_WITH_API_KEY_FINGERPRINT
+key_file=C:/Users/USERNAME/.oci/oci_api_key.pem
+tenancy=ocid1.tenancy.oc1..REPLACE_WITH_TENANCY_OCID
+region=eu-stockholm-1
