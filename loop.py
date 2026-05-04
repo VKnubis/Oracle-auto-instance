@@ -110,6 +110,10 @@ def load_config() -> InstanceConfig:
         raise ValueError("OCI_SUBNET_ID must be a subnet OCID (ocid1.subnet...)")
     if not config.availability_domain:
         raise ValueError("OCI_AVAILABILITY_DOMAIN is required")
+    if ":" not in config.availability_domain:
+        raise ValueError(
+            "OCI_AVAILABILITY_DOMAIN must be the exact OCI availability domain name, for example 'Uocm:EU-STOCKHOLM-1-AD-1'"
+        )
 
     return config
 
@@ -153,7 +157,6 @@ def build_launch_details(config: InstanceConfig, image_id: str) -> oci.core.mode
         compartment_id=config.compartment_id,
         availability_domain=config.availability_domain,
         shape=config.shape,
-        subnet_id=config.subnet_id,
         display_name=f"{config.display_name_prefix}-{os.getpid()}",
         source_details=oci.core.models.InstanceSourceViaImageDetails(
             source_type="image",
